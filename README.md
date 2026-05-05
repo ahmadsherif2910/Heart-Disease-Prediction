@@ -1,7 +1,7 @@
 # Heart Disease Prediction App
 A clinical decision support tool built with **Streamlit** and **Scikit-Learn**. This application utilizes the **UCI Cleveland Heart Disease dataset** to predict the probability of heart disease in patients based on 13 clinical features.
 
-[Link to streamlit app](https://heartdiseaseuci-sjzzhaufc3j9uaesvtd6ft.streamlit.app/ "Streamlit app")
+[Link to streamlit app](https://heartdiseaseuci.streamlit.app/ "Streamlit app")
 
 ## Project Overview
 This project implements a full machine learning pipeline, from data preprocessing and feature selection to model deployment. The core objective is to maximize **Recall**—minimizing false negatives to ensure potential heart disease cases are not overlooked in a clinical setting.
