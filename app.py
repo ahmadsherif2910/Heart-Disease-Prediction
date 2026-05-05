@@ -1,14 +1,58 @@
-import pickle
 import streamlit as st
 import datetime
 import pandas as pd
+import joblib
 
 today = datetime.date.today()
 
+
 @st.cache_resource
 def load_model():
-    with open("production/models/model.pkl","rb") as f:
-        return pickle.load(f)
+    model_path = "LogisticRegression.pkl"
+    return joblib.load(model_path)
+
+def get_clinical_explanation(pipeline, patient_data):
+    """
+    Refactored version of your explanation logic
+    returns data instead of printing.
+    """
+    # 1. Get Probability
+    prob = pipeline.predict_proba(patient_data)[0][1]
+
+    # 2. Extract components
+    classifier = pipeline.named_steps['classifier']
+    selector = pipeline.named_steps['selector']
+    preprocessor = pipeline.named_steps['preprocessor']
+
+    # 3. Transform data
+    transformed_data = preprocessor.transform(patient_data)
+    selected_data = selector.transform(transformed_data)
+
+    # 4. Calculate Contribution
+    contributions = classifier.coef_[0] * selected_data[0]
+    all_names = preprocessor.get_feature_names_out()
+    selected_names = all_names[selector.get_support()]
+
+    # 5. Map and Sort
+    importance = pd.Series(contributions, index=selected_names)
+    top_drivers = importance.abs().sort_values(ascending=False).head(3)
+
+    drivers_list = []
+    for name, val in top_drivers.items():
+        clean_name = name.split('__')[-1]
+        direction = "🔴 Increasing risk" if importance[name] > 0 else "🟢 Decreasing risk"
+        drivers_list.append(f"**{clean_name}**: {direction}")
+
+    # Risk Level logic
+    risk_level = "High" if prob > 0.8 else ("Moderate" if prob > 0.5 else "Low")
+
+    return {
+        "prob": prob,
+        "risk_level": risk_level,
+        "drivers": drivers_list,
+        "features_count": selector.k
+    }
+
 
 model = load_model()
 
@@ -124,10 +168,27 @@ if st.button("Predict", disabled=predict_disabled):
         "ca": ca,
         "thal": thal
     }])
-    prediction = model.predict(input_data)[0]
-    probability = model.predict_proba(input_data).max()
+    # Get explanation data
+    results = get_clinical_explanation(model, input_data)
 
-    if prediction == 1:
-        st.error(f"High Risk of Heart Disease\n\nConfidence: {probability*100:.2f}%")
-    else:
-        st.success(f"Low Risk of Heart Disease\n\nConfidence: {probability*100:.2f}%")
+    st.divider()
+    st.subheader("Clinical Summary")
+
+    # Display Risk with Metrics
+    cols = st.columns(2)
+    cols[0].metric("Risk Assessment", results["risk_level"])
+    cols[1].metric("Disease Probability", f"{results['prob']:.1%}")
+
+    # Display Drivers
+    st.write("### Top Diagnostic Drivers")
+    for driver in results["drivers"]:
+        st.write(driver)
+
+    # Footer Info
+    st.info(f"Model Integrity: Optimized via {results['features_count']} features.")
+
+    # Validation Recall (if available)
+    val_score = getattr(model, 'val_score_', None)
+    if val_score:
+        st.caption(f"Historical Validation Recall: {val_score:.2%}")
+
